@@ -1,0 +1,11 @@
+/__pycache__/
+/dataset/__pycache__/
+/models/__pycache__/
+/run/__pycache__/
+/tools/__pycache__/
+/experiment/
+/pickles/
+dataset.ipynb
+download.ipynb
+GT_and_probs
+to_csv_out.csv
