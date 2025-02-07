@@ -10,7 +10,7 @@ import torch
 import pickle
 import tqdm, pdb
 from sklearn.metrics import roc_auc_score
-from tools.evaluate import multilabel_evaluate, multiclass_evaluate, multilabel_accuracy
+from tools.evaluate import multilabel_evaluate, multiclass_evaluate, multilabel_accuracy, pred_n_write
 from tools.plot import save_model
 
 from tqdm import tqdm
@@ -163,8 +163,8 @@ def val_epoch(args, model, val_loader, criterion, device='cuda'):
 
     val_loader_examples_num = len(val_loader.dataset)
 
-    probs = np.zeros((val_loader_examples_num, 15), dtype = np.float32)
-    gt    = np.zeros((val_loader_examples_num, 15), dtype = np.float32)
+    probs = np.zeros((val_loader_examples_num, args.class_numbers), dtype = np.float32)
+    gt    = np.zeros((val_loader_examples_num, args.class_numbers), dtype = np.float32)
     k=0
 
     with torch.no_grad():
@@ -240,7 +240,7 @@ def fit(args, device, train_loader, val_loader, model, criterion, optimizer):
                 'epoch_val_loss': epoch_val_loss,
                 'total_train_loss_list': total_train_loss_list,
                 'total_val_loss_list': total_val_loss_list
-            }, os.path.join(f'{args.experiment_path}/{args.model_name}', 'best.pth'))
+            }, os.path.join(args.experiment_path, 'best.pth'))
             patience_counter = 0  
         else:
             patience_counter += 1
@@ -261,9 +261,8 @@ def fit(args, device, train_loader, val_loader, model, criterion, optimizer):
     h, m = divmod(m, 60)
     logger.info(f'Epoch {epoch+1}/{epochs} took {int(h)}h {int(m)}m {int(s)}s')
 
-def test(model, test_loader, device):
+def test(args, model, test_loader, device):
 
-    # モデルを評価モードに変更（勾配計算を行わない）
     logger.info('\n======= Testing... =======\n')
     model.eval()
 
@@ -275,30 +274,24 @@ def test(model, test_loader, device):
     with torch.no_grad():
         for image, label in tqdm(test_loader):
             
-                image = image.to(device) # 画像をGPUに移動
-                label = label.to(device) # ラベルをGPUに移動
+            image = image.to(device)
+            label = label.to(device)
 
-                # 前向きの計算
-                output = model(image)
+            output = model(image)
 
-                all_test_data.append(image.cpu().numpy())
+            all_test_data.append(image.cpu().numpy())
 
-                # 結果とラベルを格納
-                predictions.append(torch.sigmoid(output))
-                labels.append(label)
+            predictions.append(torch.sigmoid(output))
+            labels.append(label)
 
     logger.info('end test')
 
-    # 結果とラベルを結合
     predictions = torch.cat(predictions, axis=0)
     labels = torch.cat(labels, axis=0)
-    #predictions = torch.stack(predictions)
-    #labels = torch.stack(labels)
 
-    # 扱いやすいようにnumpy形式にしておく
     predictions = predictions.cpu().detach().numpy()
     labels = labels.cpu().detach().numpy()
 
-    #pred_n_write(args, test_loader, model, save_name)
+    #pred_n_write(args, test_loader, model, 'test')
 
-    return predictions, labels, all_test_data
+    return predictions, labels

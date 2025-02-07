@@ -28,7 +28,10 @@ def get_roc_auc_score(args, y_true, y_probs):
     with open(os.path.join(args.pkl_dir_path, args.disease_classes_pkl_path), 'rb') as handle:
         all_classes = pickle.load(handle)
     
-    NoFindingIndex = all_classes.index('No Finding')
+    # Check if 'No Finding' exists and get its index
+    NoFindingIndex = -1  # Default to -1 if 'No Finding' does not exist
+    if 'No Finding' in all_classes:
+        NoFindingIndex = all_classes.index('No Finding')
 
     if True:
         print('\nNoFindingIndex: ', NoFindingIndex)
@@ -45,9 +48,9 @@ def get_roc_auc_score(args, y_true, y_probs):
         class_roc_auc_list.append(class_roc_auc)
         if i != NoFindingIndex:
             useful_classes_roc_auc_list.append(class_roc_auc)
-    if True:
-        print('\nclass_roc_auc_list: ', class_roc_auc_list)
-        print('\nuseful_classes_roc_auc_list', useful_classes_roc_auc_list)
+    # if True:
+    #     print('\nclass_roc_auc_list: ', class_roc_auc_list)
+    #     print('\nuseful_classes_roc_auc_list', useful_classes_roc_auc_list)
 
     return np.mean(np.array(useful_classes_roc_auc_list))
 

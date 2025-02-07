@@ -16,13 +16,12 @@ def init_log_setting(args):
     """
     stream_hd = logging.StreamHandler()
 
-    log_path = f'{args.experiment_path}/{args.model_name}/'
-    if not os.path.exists(log_path):
-        os.mkdir(log_path)
+    if not os.path.exists(args.experiment_path):
+        os.mkdir(args.experiment_path)
     if args.test:
-        file_hd = logging.FileHandler(os.path.join(f'{log_path}/', f'test.log'))
+        file_hd = logging.FileHandler(os.path.join(args.experiment_path, 'test.log'))
     else:
-        file_hd = logging.FileHandler(os.path.join(f'{log_path}/', f'train.log'))
+        file_hd = logging.FileHandler(os.path.join(args.experiment_path, 'train.log'))
 
 
     logging.basicConfig(format='%(asctime)s - %(name)s - [%(levelname)s] : %(message)s', \

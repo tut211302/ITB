@@ -18,7 +18,7 @@ def get_argument():
     parser.add_argument('-pc, --train_pc', type = float, default = 0.8)
     parser.add_argument('--loss_func', type = str, default = 'BCE', choices = {'BCE', 'FocalLoss'}, help = 'loss function')
     parser.add_argument('-r','--resume', action = 'store_true') # args.resume will return True if -r or --resume is used in the terminal
-    parser.add_argument('--ckpt', type = str, default = 'best.path', help = 'Path of the ckeckpoint that you want to load')
+    parser.add_argument('--ckpt', type = str, default = 'best.pth', help = 'Path of the ckeckpoint that you want to load')
     parser.add_argument('-t','--test', action = 'store_true')   # args.test   will return True if -t or --test   is used in the terminal
 
     parser.add_argument('--pkl_dir_path'  ,       default = 'pickles')
@@ -28,11 +28,16 @@ def get_argument():
     parser.add_argument('--models_dir',               default = 'models')
 
     parser.add_argument('--threshold',         type=float,   default=0.5)
-    parser.add_argument('--experiment_path',    type=str, default='/home/fukuyama/ITB/experiment')
+    #parser.add_argument('--experiment_path',    type=str, default='/home/fukuyama/ITB/experiment')
     parser.add_argument('--experiment_name',    type=str, default='sample')
     parser.add_argument('--model_name',         type=str, default = 'resnet50')
+    parser.add_argument('--class_numbers',         type=int, default = '15')
     #parser.add_argument('--model_state',      type=str,   default='best.pth')
 
     args = parser.parse_args()
+
+    args.experiment_path = f'/home/fukuyama/ITB/experiment/{args.class_numbers}/{args.model_name}/'
+
+    print(f"Experiment path: {args.experiment_path}")
 
     return args

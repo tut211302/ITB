@@ -6,6 +6,7 @@ from torchinfo import summary
 class CustomModel(nn.Module):
     def __init__(self, model_name, label_numbers):
         super().__init__()
+        self.label_numbers = label_numbers
         # ResNet系列
         if model_name == 'resnet18':
             self.base_model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
@@ -256,4 +257,9 @@ class CustomModel(nn.Module):
         x = self.relu(self.fc1(x))
         x = self.dropout(x)
         x = self.fc2(x)
-        return x
+        
+        if self.label_numbers == 1:
+            return torch.sigmoid(x)
+        else:
+            return x
+    

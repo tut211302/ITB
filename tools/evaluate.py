@@ -18,25 +18,58 @@ logger = logging.getLogger(__name__)
 
 def pred_n_write(args, test_loader, model, save_name, device='cuda' if torch.cuda.is_available() else 'cpu'):
     model.to(device)
-    model.eval()  # ループの外に移動
+    # model.eval()  # ループの外に移動
 
-    num_samples = len(test_loader.dataset)
-    num_classes = 15  # クラス数は動的に変更可能なら変える
+    # num_samples = len(test_loader.dataset)
+    # num_classes = 15  # クラス数は動的に変更可能なら変える
 
-    res = np.zeros((num_samples, num_classes), dtype=np.float32)
+    # res = np.zeros((num_samples, num_classes), dtype=np.float32)
 
-    labels = []
-    k = 0
-    for batch_idx, img, label in tqdm(enumerate(test_loader)):
-        img = img.to(device)  # GPU に送る
-        with torch.no_grad():
-            pred = torch.sigmoid(model(img)).cpu().numpy()  # CPU に戻して NumPy 配列化
-            res[k: k + pred.shape[0], :] = pred
-            k += pred.shape[0]
-            labels.append(label)
-    labels = labels.cpu().detach().numpy()
-    
+    # labels = []
+    # k = 0
+    # for batch_idx, img, label in tqdm(enumerate(test_loader)):
+    #     img = img.to(device)  # GPU に送る
+    #     with torch.no_grad():
+    #         pred = torch.sigmoid(model(img)).cpu().numpy()  # CPU に戻して NumPy 配列化
+    #         res[k: k + pred.shape[0], :] = pred
+    #         k += pred.shape[0]
+    #         labels.append(label)
+    # labels = labels.cpu().detach().numpy()
+
+    logger.info('\n======= Testing... =======\n')
+    model.eval()
+
+    predictions = []
+    labels      = []
+    all_test_data = []
+
+    logger.info('start test')
+    with torch.no_grad():
+        for image, label in tqdm(test_loader):
             
+            image = image.to(device)
+            label = label.to(device)
+
+            output = model(image)
+
+            all_test_data.append(image.cpu().numpy())
+
+            predictions.append(torch.sigmoid(output))
+            labels.append(label)
+
+    logger.info('end test')
+
+    predictions = torch.cat(predictions, axis=0)
+    labels = torch.cat(labels, axis=0)
+
+    predictions = predictions.cpu().detach().numpy()
+    labels = labels.cpu().detach().numpy()
+
+    th = args.threshold
+
+    preds_array = np.array(predictions)
+    preds_list = np.where(preds_array > th, 1.0, 0.0).tolist()
+
     # write csv
     logger.info('populating the csv')
     submit = pd.DataFrame()
@@ -44,34 +77,15 @@ def pred_n_write(args, test_loader, model, save_name, device='cuda' if torch.cud
     with open('pickeles/disease_classes.pickle', 'rb') as handle:
         disease_classes = pickle.load(handle)
 
-    accuracy_dict, real_index_dict, pred_index_dict, report_dict, hamming, jaccard = multilabel_evaluate(args, res, labels, disease_classes)
-        
-    report_df = pd.DataFrame(report_dict).T
-    report_df.to_csv(os.path.join({args.experiment_path}/{args.model_name}, 'report.csv'))
-
-    for label_combination, accuracy_value in accuracy_dict.items():
-        logger.info(f'{label_combination} accuracy : {accuracy_value[0]}/{accuracy_value[1]}')
-        logger.info(f'{label_combination} accuracy : {accuracy_value[2]}')
-    for label_combination, index_list in real_index_dict.items():
-        logger.info(f'{label_combination} real_index : {index_list}')
-    for label_combination, index_list in pred_index_dict.items():
-        logger.info(f'{label_combination} pred_index : {index_list}')
-    for label_name, scores in report_dict.items():
-        logger.info(f'{label_name} : {scores}')
-    all_acc = multilabel_accuracy(args, res, labels)
-    logger.info(f'all_accuracy : {all_acc}')
-    logger.info(f'hamming_loss : {hamming}')
-    logger.info(f'jaccard_score : {jaccard}')
-    
     for idx, col in enumerate(disease_classes):
         if col == 'Hernia':
-            submit['Hern'] = res[:, idx]
+            submit['Hern'] = preds_list[:, idx]
         elif col == 'Pleural_Thickening':
-            submit['Pleural_thickening'] = res[:, idx]
+            submit['Pleural_thickening'] = preds_list[:, idx]
         elif col == 'No Finding':
-            submit['No_findings'] = res[:, idx]
+            submit['No_findings'] = preds_list[:, idx]
         else:
-            submit[col] = res[:, idx]
+            submit[col] = preds_list[:, idx]
     rand_num = str(random.randint(1000, 9999))
     csv_name = '{}___{}.csv'.format(save_name, rand_num)
     submit.to_csv('res/' + csv_name, index = False)
@@ -203,21 +217,22 @@ def multilabel_evaluate(args, preds, labels, branch_types):
 
     count = 0
 
-    # ラベルごとのマッピングをタプルに変換して辞書で処理
+    # ラベルごとのマッピングをクラス名に変換
     for real, pred in zip(labels, preds_list):
-        real_tuple = tuple(real)
-        pred_tuple = tuple(pred)
+        real_classes = frozenset([branch_types[i] for i, val in enumerate(real) if val == 1])
+        pred_classes = frozenset([branch_types[i] for i, val in enumerate(pred) if val == 1])
 
         # 正解ラベルのカウントとインデックスを更新
-        count_dict[real_tuple] += 1
-        real_index_dict[real_tuple].append(count)
-        pred_index_dict[pred_tuple].append(count)
+        count_dict[real_classes] += 1
+        real_index_dict[real_classes].append(count)
+        pred_index_dict[pred_classes].append(count)
 
         # 一致する場合、一致カウントを更新
-        if real_tuple == pred_tuple:
-            matched_dict[real_tuple] += 1
+        if real_classes == pred_classes:
+            matched_dict[real_classes] += 1
 
         count += 1
+
     # 各組み合わせの正解率を表示
     for label_combination, count_value in count_dict.items():
         if count_value != 0:

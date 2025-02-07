@@ -15,10 +15,11 @@ def q(text = ''): # easy way to exiting the script. useful while debugging
     sys.exit()
 
 class XRaysDataset(Dataset):
-    def __init__(self, args, data_dir, transform = None, subset = 'train'):
+    def __init__(self, args, data_dir, class_numbers, transform = None, subset = 'train'):
         self.data_dir = data_dir
         self.subset = subset
         self.transform = transform
+        self.class_numbers = class_numbers
         # logger.info('self.data_dir: ', self.data_dir)
 
         # full dataframe including train_val and test set
@@ -28,20 +29,20 @@ class XRaysDataset(Dataset):
         if self.subset == 'train' or self.subset == 'val':            
                 
             # Load or create train_val_df
-            # self.train_val_df = self.load_or_create_df(
-            #     args.pkl_dir_path, 
-            #     args.train_val_df_pkl_path, 
-            #     'self.train_val_df'
-            # )
-            self.train_val_df = self.get_train_val_df()
+            self.train_val_df = self.load_or_create_df(
+                args.pkl_dir_path, 
+                args.train_val_df_pkl_path, 
+                'self.train_val_df'
+            )
+            #self.train_val_df = self.get_train_val_df()
 
             self.the_chosen, self.all_classes, self.all_classes_dict = self.choose_the_indices()
 
             # if not os.path.exists(os.path.join(args.pkl_dir_path, args.disease_classes_pkl_path)):
             #     # pickle dump the classes list
-            #     with open(os.path.join(args.pkl_dir_path, args.disease_classes_pkl_path), 'wb') as handle:
-            #         pickle.dump(self.all_classes, handle, protocol = pickle.HIGHEST_PROTOCOL)
-            #         print('\n{}: dumped'.format(args.disease_classes_pkl_path))
+            with open(os.path.join(args.pkl_dir_path, args.disease_classes_pkl_path), 'wb') as handle:
+                pickle.dump(self.all_classes, handle, protocol = pickle.HIGHEST_PROTOCOL)
+                print('\n{}: dumped'.format(args.disease_classes_pkl_path))
             # else:
             #     print('\n{}: already exists'.format(args.disease_classes_pkl_path))
 
@@ -52,15 +53,13 @@ class XRaysDataset(Dataset):
 
         elif self.subset == 'test':
 
-            # Load or create test_df
-            # self.new_df = self.load_or_create_df(
-            #     args.pkl_dir_path, 
-            #     args.test_df_pkl_path, 
-            #     'self.test_df'
-            # )
-            self.test_df = self.get_test_df()
-            self.the_chosen, self.all_classes, self.all_classes_dict = self.choose_the_indices()
-            self.new_df = self.test_df.iloc[self.the_chosen, :]
+            #Load or create test_df
+            self.new_df = self.load_or_create_df(
+                args.pkl_dir_path, 
+                args.test_df_pkl_path, 
+                'self.test_df'
+            )
+            #self.new_df = self.get_test_df()
 
             # loading the classes list
             with open(os.path.join(args.pkl_dir_path, args.disease_classes_pkl_path), 'rb') as handle:
@@ -111,16 +110,16 @@ class XRaysDataset(Dataset):
 
         img = cv2.imread(row['image_links'])
         labels = str.split(row['Finding Labels'], '|')
-
-        # グレースケール画像（1次元）なので3次元に増やす
+        
         if img.ndim != 3:
             img = img[:,:,np.newaxis]
             img = np.tile(img, (1, 1, 3))
         
         target = torch.zeros(len(self.all_classes))
         for lab in labels:
-            lab_idx = self.all_classes.index(lab)
-            target[lab_idx] = 1            
+            if lab in self.all_classes:
+                lab_idx = self.all_classes.index(lab)
+                target[lab_idx] = 1            
     
         if self.transform is not None:
             img = self.transform(img)
@@ -187,33 +186,53 @@ class XRaysDataset(Dataset):
         for i in tqdm(range(length)):
             if self.subset == 'train' or self.subset == 'val':
                 labels = self.train_val_df.iloc[i]['Finding Labels'].split('|')
-            else:
-                labels = self.test_df.iloc[i]['Finding Labels'].split('|')
 
             for label in labels:
                 all_classes[label] = all_classes.get(label, 0) + 1
         desc_dic = sorted(all_classes.items(),key=lambda x:x[1])
 
+        chosen_class = [label for label, _ in desc_dic][:self.class_numbers]
+        self.all_classes = chosen_class
+
         #max_examples_per_class = desc_dic[0][1]
         #max_examples_per_class = desc_dic[-2][1]
-        max_examples_per_class = 10
+        max_examples_per_class = 100
         all_classes = {}
         the_chosen = []
         multi_count = 0
+        no_finding_count = 0
         # for i in tqdm(range(len(merged_df))):
         print('\nSampling the huuuge training dataset')
         for i in tqdm(list(np.random.choice(range(length),length, replace = False))):
             
             if self.subset == 'train' or self.subset == 'val':
                 labels = self.train_val_df.iloc[i]['Finding Labels'].split('|')
-            else:
-                labels = self.test_df.iloc[i]['Finding Labels'].split('|')
 
-            if 'Hernia' in labels:
-                the_chosen.append(i)
-                for label in labels:
-                    all_classes[label] = all_classes.get(label, 0) + 1
-                continue
+            if 'No Finding' in labels and self.class_numbers == 1:
+                if no_finding_count < max_examples_per_class:
+                    the_chosen.append(i)
+                    no_finding_count += 1
+                    # for label in labels:
+                    #     all_classes[label] = all_classes.get(label, 0) + 1
+                    continue
+            
+            # if any(x in labels for x in chosen_class):
+            if any(x in chosen_class for x in labels):
+                if all(all_classes.get(label, 0) < max_examples_per_class for label in labels):
+                    the_chosen.append(i)
+                    for label in labels:
+                        if label in chosen_class:
+                            all_classes[label] = all_classes.get(label, 0) + 1
+
+            
+
+            
+
+            # if 'Hernia' in labels:
+            #     the_chosen.append(i)
+            #     for label in labels:
+            #         all_classes[label] = all_classes.get(label, 0) + 1
+            #     continue
 
             # if len(labels) > 1:
             #     the_chosen.append(i)
@@ -222,12 +241,12 @@ class XRaysDataset(Dataset):
             #         all_classes[label] = all_classes.get(label, 0) + 1
             #     continue
 
-            if all(all_classes.get(label, 0) < max_examples_per_class for label in labels):
-                the_chosen.append(i)
-                for label in labels:
-                    all_classes[label] = all_classes.get(label, 0) + 1
+            # if all(all_classes.get(label, 0) < max_examples_per_class for label in labels):
+            #     the_chosen.append(i)
+            #     for label in labels:
+            #         all_classes[label] = all_classes.get(label, 0) + 1
 
-        return the_chosen, sorted(list(all_classes)), all_classes
+        return the_chosen, chosen_class, all_classes
     
     def resample(self):
         self.the_chosen, self.all_classes, self.all_classes_dict = self.choose_the_indices()
