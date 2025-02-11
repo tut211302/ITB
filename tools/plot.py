@@ -34,8 +34,8 @@ def get_roc_auc_score(args, y_true, y_probs):
         NoFindingIndex = all_classes.index('No Finding')
 
     if True:
-        print('\nNoFindingIndex: ', NoFindingIndex)
-        print('y_true.shape, y_probs.shape ', y_true.shape, y_probs.shape)
+        #print('\nNoFindingIndex: ', NoFindingIndex)
+        #print('y_true.shape, y_probs.shape ', y_true.shape, y_probs.shape)
         GT_and_probs = {'y_true': y_true, 'y_probs': y_probs}
         with open('GT_and_probs', 'wb') as handle:
             pickle.dump(GT_and_probs, handle, protocol = pickle.HIGHEST_PROTOCOL)

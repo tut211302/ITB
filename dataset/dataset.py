@@ -14,12 +14,26 @@ def q(text = ''): # easy way to exiting the script. useful while debugging
     logger.info('> ', text)
     sys.exit()
 
+def apply_CLAHE(image, clip_limit=2.0, grid_size=(8, 8)):
+    """
+    CLAHE を適用する関数
+    :param image: 入力画像 (numpy array)
+    :param clip_limit: コントラスト制限
+    :param grid_size: タイルグリッドサイズ
+    :return: CLAHE 適用後の画像
+    """
+    image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # グレースケール変換
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=grid_size)
+    image_clahe = clahe.apply(image_gray)
+    return image_clahe
+
 class XRaysDataset(Dataset):
-    def __init__(self, args, data_dir, class_numbers, transform = None, subset = 'train'):
+    def __init__(self, args, data_dir, class_numbers, chosen_class = None, transform = None, subset = 'train'):
         self.data_dir = data_dir
         self.subset = subset
         self.transform = transform
         self.class_numbers = class_numbers
+        self.chosen_class = chosen_class
         # logger.info('self.data_dir: ', self.data_dir)
 
         # full dataframe including train_val and test set
@@ -60,6 +74,7 @@ class XRaysDataset(Dataset):
                 'self.test_df'
             )
             #self.new_df = self.get_test_df()
+            #self.new_df = self.new_df.iloc[50]
 
             # loading the classes list
             with open(os.path.join(args.pkl_dir_path, args.disease_classes_pkl_path), 'rb') as handle:
@@ -109,6 +124,8 @@ class XRaysDataset(Dataset):
         row = self.new_df.iloc[index, :]
 
         img = cv2.imread(row['image_links'])
+        img = apply_CLAHE(img)
+        
         labels = str.split(row['Finding Labels'], '|')
         
         if img.ndim != 3:
@@ -175,6 +192,10 @@ class XRaysDataset(Dataset):
         #logger.info('test_df.shape: ', test_df.shape)
 
         return test_df
+    
+    def find_min_key(keys_list, data_dict):
+    # キーリスト内のキーのうち、最小値を持つキーを探す
+        return min(keys_list, key=lambda k: data_dict.get(k, float('inf')))
 
     def choose_the_indices(self):
         
@@ -190,13 +211,16 @@ class XRaysDataset(Dataset):
             for label in labels:
                 all_classes[label] = all_classes.get(label, 0) + 1
         desc_dic = sorted(all_classes.items(),key=lambda x:x[1])
+        asc_dic = sorted(all_classes.items(), key=lambda x: x[1], reverse=True)
 
-        chosen_class = [label for label, _ in desc_dic][:self.class_numbers]
-        self.all_classes = chosen_class
+        if self.chosen_class == None:
+            self.chosen_class = [label for label, _ in asc_dic][1:self.class_numbers+1]
+            max_examples_per_class = 1000000
+        else:
+            min_key = self.find_min_key(self.chosen_class, all_classes)
+            max_examples_per_class = all_classes[min_key]
 
         #max_examples_per_class = desc_dic[0][1]
-        #max_examples_per_class = desc_dic[-2][1]
-        max_examples_per_class = 100
         all_classes = {}
         the_chosen = []
         multi_count = 0
@@ -217,17 +241,14 @@ class XRaysDataset(Dataset):
                     continue
             
             # if any(x in labels for x in chosen_class):
-            if any(x in chosen_class for x in labels):
+            if any(x in self.chosen_class for x in labels):
                 if all(all_classes.get(label, 0) < max_examples_per_class for label in labels):
                     the_chosen.append(i)
                     for label in labels:
-                        if label in chosen_class:
+                        if label in self.chosen_class:
                             all_classes[label] = all_classes.get(label, 0) + 1
 
-            
-
-            
-
+        
             # if 'Hernia' in labels:
             #     the_chosen.append(i)
             #     for label in labels:
@@ -246,7 +267,7 @@ class XRaysDataset(Dataset):
             #     for label in labels:
             #         all_classes[label] = all_classes.get(label, 0) + 1
 
-        return the_chosen, chosen_class, all_classes
+        return the_chosen, self.chosen_class, all_classes
     
     def resample(self):
         self.the_chosen, self.all_classes, self.all_classes_dict = self.choose_the_indices()

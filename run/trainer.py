@@ -190,7 +190,7 @@ def val_epoch(args, model, val_loader, criterion, device='cuda'):
     return valid_batch_loss, np.mean(valid_batch_loss), roc_auc
 
 
-def fit(args, device, train_loader, val_loader, model, criterion, optimizer):
+def fit(args, device, train_loader, val_loader, model, criterion, optimizer, experiment_path):
 
     #logger.info(f'======= Training after epoch #{epochs_till_now}... =======')
 
@@ -240,7 +240,7 @@ def fit(args, device, train_loader, val_loader, model, criterion, optimizer):
                 'epoch_val_loss': epoch_val_loss,
                 'total_train_loss_list': total_train_loss_list,
                 'total_val_loss_list': total_val_loss_list
-            }, os.path.join(args.experiment_path, 'best.pth'))
+            }, os.path.join(experiment_path, 'best.pth'))
             patience_counter = 0  
         else:
             patience_counter += 1
@@ -266,32 +266,31 @@ def test(args, model, test_loader, device):
     logger.info('\n======= Testing... =======\n')
     model.eval()
 
-    predictions = []
-    labels      = []
-    all_test_data = []
-
-    logger.info('start test')
+    y_true = []
+    y_pred = []
+    results = []
     with torch.no_grad():
-        for image, label in tqdm(test_loader):
+        for idx, (images, labels) in tqdm(enumerate(test_loader)):
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            preds = torch.sigmoid(outputs) > args.threshold  # マルチラベル分類のための閾値処理
+
+            y_pred.append(torch.sigmoid(outputs))
+            y_true.append(labels)
             
-            image = image.to(device)
-            label = label.to(device)
-
-            output = model(image)
-
-            all_test_data.append(image.cpu().numpy())
-
-            predictions.append(torch.sigmoid(output))
-            labels.append(label)
+            for i in range(len(labels)):
+                true_labels = "|".join(map(str, labels[i].nonzero(as_tuple=True)[0].tolist()))
+                pred_labels = "|".join(map(str, preds[i].nonzero(as_tuple=True)[0].tolist()))
+                results.append((idx * test_loader.batch_size + i, true_labels, pred_labels))
 
     logger.info('end test')
 
-    predictions = torch.cat(predictions, axis=0)
-    labels = torch.cat(labels, axis=0)
+    y_pred = torch.cat(y_pred, axis=0)
+    y_true = torch.cat(y_true, axis=0)
 
-    predictions = predictions.cpu().detach().numpy()
-    labels = labels.cpu().detach().numpy()
+    y_pred = y_pred.cpu().detach().numpy()
+    y_true = y_true.cpu().detach().numpy()
 
     #pred_n_write(args, test_loader, model, 'test')
 
-    return predictions, labels
+    return y_pred, y_true, results

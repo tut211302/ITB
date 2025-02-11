@@ -16,55 +16,8 @@ from tqdm import tqdm
 import logging
 logger = logging.getLogger(__name__)
 
-def pred_n_write(args, test_loader, model, save_name, device='cuda' if torch.cuda.is_available() else 'cpu'):
-    model.to(device)
-    # model.eval()  # ループの外に移動
-
-    # num_samples = len(test_loader.dataset)
-    # num_classes = 15  # クラス数は動的に変更可能なら変える
-
-    # res = np.zeros((num_samples, num_classes), dtype=np.float32)
-
-    # labels = []
-    # k = 0
-    # for batch_idx, img, label in tqdm(enumerate(test_loader)):
-    #     img = img.to(device)  # GPU に送る
-    #     with torch.no_grad():
-    #         pred = torch.sigmoid(model(img)).cpu().numpy()  # CPU に戻して NumPy 配列化
-    #         res[k: k + pred.shape[0], :] = pred
-    #         k += pred.shape[0]
-    #         labels.append(label)
-    # labels = labels.cpu().detach().numpy()
-
-    logger.info('\n======= Testing... =======\n')
-    model.eval()
-
-    predictions = []
-    labels      = []
-    all_test_data = []
-
-    logger.info('start test')
-    with torch.no_grad():
-        for image, label in tqdm(test_loader):
-            
-            image = image.to(device)
-            label = label.to(device)
-
-            output = model(image)
-
-            all_test_data.append(image.cpu().numpy())
-
-            predictions.append(torch.sigmoid(output))
-            labels.append(label)
-
-    logger.info('end test')
-
-    predictions = torch.cat(predictions, axis=0)
-    labels = torch.cat(labels, axis=0)
-
-    predictions = predictions.cpu().detach().numpy()
-    labels = labels.cpu().detach().numpy()
-
+def pred_n_write(args, test_loader, predictions, save_name):
+    
     th = args.threshold
 
     preds_array = np.array(predictions)

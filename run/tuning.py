@@ -72,7 +72,7 @@ def objective(args, trial):
     transform = get_transform()
 
     # make the datasets
-    XRayTrain_dataset = XRaysDataset(args, args.data_dir, transform, subset = 'train')
+    XRayTrain_dataset = XRaysDataset(args, args.data_dir, args.class_numbers, None, transform, subset = 'train')
     train_percentage = 0.8
     #args.train_pc
     train_dataset, val_dataset = torch.utils.data.random_split(XRayTrain_dataset, [int(len(XRayTrain_dataset)*train_percentage), len(XRayTrain_dataset)-int(len(XRayTrain_dataset)*train_percentage)])

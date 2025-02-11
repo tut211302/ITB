@@ -3,6 +3,7 @@
 import logging
 
 from run.run import run_train, run_test
+from run.run2 import ensemble_run_train
 from run.tuning import tuning_start
 from tools import log, parser
 
@@ -29,6 +30,7 @@ def main():
     else:
         run_train(args)
         run_test(args)
+        #ensemble_run_train(args)
         #tuning_start(args)
 
     logger.info('finish')
