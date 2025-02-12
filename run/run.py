@@ -9,6 +9,8 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 from openpyxl import Workbook
+import torchxrayvision as xrv
+import skimage, torch, torchvision
 
 import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_curve, auc
@@ -32,11 +34,14 @@ def q(text = ''): # easy way to exiting the script. useful while debugging
 def get_transform():
    
     # 前処理の定義
+    #transform = torchvision.transforms.Compose([xrv.datasets.XRayCenterCrop(),xrv.datasets.XRayResizer(224)])
     transform = transforms.Compose([
         transforms.ToPILImage(), 
         transforms.Resize(224),
+        #transforms.Grayscale(num_output_channels=1),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
+        #transforms.Normalize(mean=[0.5,],std=[0.5,])
     ])
     
     return transform
@@ -83,6 +88,8 @@ def run_train(args):
     logger.info('we are working with \nImages shape: {} and \nTarget shape: {}'.format( a.shape, b.shape))
 
     model = CustomModel(args.model_name, len(XRayTrain_dataset.all_classes)).to(device)
+    logger.info(model)
+    #model = CustomModel('densenet121-res224-chex', len(XRayTrain_dataset.all_classes)).to(device)
 
     # define the loss function
     if args.loss_func == 'BCE':
@@ -91,7 +98,7 @@ def run_train(args):
         
     optimizer_name = 'Adam'
     optimizer = optim.Adam(
-        model.parameters(),
+        model.fc2.parameters(),
         lr=args.lr,
         betas=(0.9, 0.999),
         weight_decay=0.5e-4,

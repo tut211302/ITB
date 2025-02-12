@@ -101,6 +101,21 @@ def ensemble_run_train(args):
         experiment_path = f'/home/fukuyama/ITB/experiment/{args.class_numbers}/{model_name}/'
         fit(args, device, train_loader, val_loader, model, criterion, optimizer, experiment_path)
 
+def ensemble_run_test(args):
+
+    # Determine device
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    logger.info(f'device is {device}')
+
+    class_indices = ['Effusion','Pneumothorax','Fibrosis','Consolidation','Atelectasis',
+                    'Pneumonia','Infiltration','Mass','Nodule','Cardiomegaly',
+                    'Emphysema','Pleural_Thickening','Edema','Hernia']
+    class_indices = class_indices[:args.class_numbers]
+    model_types = ['resnet18', 'resnet34', 'resnet50', 'resnet101']
+    models = {}
+
+    # Load preprocessing
+    transform = get_transform()
 
     # make the datasets
     test_dataset = XRaysDataset(args, args.data_dir, 1, transform, subset = 'test')
@@ -122,8 +137,9 @@ def ensemble_run_train(args):
         
     #args.experiment_path = f'/home/fukuyama/ITB/experiment/{args.class_numbers}/{args.model_name}/'
     
+
     # ===== テスト & 結果の統合 =====
-    model_predictions = {name: [] for name in models.keys()}
+    model_predictions = {name: [] for name in model_types}
     true_labels = []
 
     with torch.no_grad():
@@ -131,7 +147,7 @@ def ensemble_run_train(args):
             images, labels = images.to(device), labels.to(device)
             true_labels.append(labels.cpu().numpy())
 
-            for model_name, class_idx in zip(models.keys(), class_indices):
+            for model_name, class_idx in zip(model_types, class_indices):
 
                 model = CustomModel(model_name, args.class_numbers).to(device)
                 experiment_path = f'/home/fukuyama/ITB/experiment/{args.class_numbers}/{model_name}/'

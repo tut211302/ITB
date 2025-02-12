@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import cv2
 import pickle
+from PIL import Image
 from torch.utils.data import Dataset
 from tqdm import tqdm
 import torch
@@ -22,9 +23,24 @@ def apply_CLAHE(image, clip_limit=2.0, grid_size=(8, 8)):
     :param grid_size: タイルグリッドサイズ
     :return: CLAHE 適用後の画像
     """
-    image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # グレースケール変換
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=grid_size)
-    image_clahe = clahe.apply(image_gray)
+
+    # BGR チャンネルを分割
+    b, g, r = cv2.split(image)
+
+    # CLAHE の設定
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
+    # 各チャンネルに適用
+    b_clahe = clahe.apply(b)
+    g_clahe = clahe.apply(g)
+    r_clahe = clahe.apply(r)
+
+    # チャンネルを統合
+    image_clahe = cv2.merge([b_clahe, g_clahe, r_clahe])
+
+    #image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # グレースケール変換
+    #clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=grid_size)
+    #image_clahe = clahe.apply(image_gray)
     return image_clahe
 
 class XRaysDataset(Dataset):
@@ -123,14 +139,16 @@ class XRaysDataset(Dataset):
     def __getitem__(self, index):
         row = self.new_df.iloc[index, :]
 
+        #img = row['image_links']
         img = cv2.imread(row['image_links'])
+        #img = self.load_image(row['image_links'])
         img = apply_CLAHE(img)
         
         labels = str.split(row['Finding Labels'], '|')
         
         if img.ndim != 3:
-            img = img[:,:,np.newaxis]
-            img = np.tile(img, (1, 1, 3))
+           img = img[:,:,np.newaxis]
+           img = np.tile(img, (1, 1, 3))
         
         target = torch.zeros(len(self.all_classes))
         for lab in labels:
@@ -142,6 +160,10 @@ class XRaysDataset(Dataset):
             img = self.transform(img)
     
         return img, target
+    
+    def load_image(self, path):
+        image = Image.open(path)
+        return image
 
     def get_df(self):
         csv_path = os.path.join(self.data_dir, 'Data_Entry_2017.csv')
@@ -217,8 +239,9 @@ class XRaysDataset(Dataset):
             self.chosen_class = [label for label, _ in asc_dic][1:self.class_numbers+1]
             max_examples_per_class = 1000000
         else:
-            min_key = self.find_min_key(self.chosen_class, all_classes)
-            max_examples_per_class = all_classes[min_key]
+            #min_key = self.find_min_key(self.chosen_class, all_classes)
+            self.chosen_class = [label for label, _ in asc_dic][1:self.class_numbers+1]
+            max_examples_per_class = all_classes[self.chosen_class[-1]]
 
         #max_examples_per_class = desc_dic[0][1]
         all_classes = {}

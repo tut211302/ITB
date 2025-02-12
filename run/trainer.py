@@ -193,7 +193,7 @@ def val_epoch(args, model, val_loader, criterion, device='cuda'):
 def fit(args, device, train_loader, val_loader, model, criterion, optimizer, experiment_path):
 
     #logger.info(f'======= Training after epoch #{epochs_till_now}... =======')
-
+    
     epoch_train_loss = []
     epoch_val_loss = []
     total_train_loss_list = []
@@ -213,6 +213,7 @@ def fit(args, device, train_loader, val_loader, model, criterion, optimizer, exp
     logger.info("Training started.")
 
     epochs = args.epochs
+    
     for epoch in tqdm(range(epochs)):
         logger.info(f'============ EPOCH {epoch+1}/{epochs} ============')
         
