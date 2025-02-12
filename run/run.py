@@ -50,6 +50,7 @@ def run_train(args):
 
     # Determine device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    torch.backends.cudnn.benchmark = True
     logger.info(f'device is {device}')
 
     # Load preprocessing
@@ -98,7 +99,7 @@ def run_train(args):
         
     optimizer_name = 'Adam'
     optimizer = optim.Adam(
-        model.fc2.parameters(),
+        model.parameters(),
         lr=args.lr,
         betas=(0.9, 0.999),
         weight_decay=0.5e-4,

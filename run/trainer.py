@@ -36,7 +36,7 @@ def get_resampled_train_val_dataloaders(XRayTrain_dataset, transform, bs):
 
     # make dataloaders
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size = bs, shuffle = True)
-    val_loader   = torch.utils.data.DataLoader(val_dataset,   batch_size = bs, shuffle = not True)
+    val_loader   = torch.utils.data.DataLoader(val_dataset,   batch_size = bs, shuffle = False)
 
     logger.info('\n-----Resampled Batchloaders Information -----')
     logger.info('num batches in train_loader: {}'.format(len(train_loader)))
@@ -133,61 +133,108 @@ def get_resampled_train_val_dataloaders(XRayTrain_dataset, transform, bs):
 #     return val_loss_list, running_val_loss/float(len(val_loader.dataset)), roc_auc
 
 # モデル訓練と評価の関数
-def train_epoch(model, train_loader, optimizer, criterion, device='cuda'):
+# def train_epoch(model, train_loader, optimizer, criterion, device='cuda'):
 
+#     model.train()
+#     train_batch_loss = []
+    
+#     for image, label in train_loader:
+        
+#             image, label = image.to(device), label.to(device)
+
+#             optimizer.zero_grad()
+
+#             output = model(image)
+
+#             loss = criterion(output, label)
+
+#             loss.backward()
+
+#             optimizer.step()
+
+#             train_batch_loss.append(loss.item())
+        
+#     return train_batch_loss, np.mean(train_batch_loss)
+
+def train_epoch(model, train_loader, optimizer, criterion, device='cuda'):
     model.train()
-    train_batch_loss = []
+    total_loss = 0
+    total_samples = 0
     
     for image, label in train_loader:
+        image, label = image.to(device), label.to(device)
+
+        optimizer.zero_grad()
+        output = model(image)
+        loss = criterion(output, label)
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item() * image.size(0)  # バッチサイズ分の loss を加算
+        total_samples += image.size(0)  # サンプル数をカウント
         
-            image, label = image.to(device), label.to(device)
-
-            optimizer.zero_grad()
-
-            output = model(image)
-
-            loss = criterion(output, label)
-
-            loss.backward()
-
-            optimizer.step()
-
-            train_batch_loss.append(loss.item())
-        
-    return train_batch_loss, np.mean(train_batch_loss)
+    return total_loss, total_loss / total_samples  # エポック全体の平均 loss
 
 def val_epoch(args, model, val_loader, criterion, device='cuda'):
-    
     model.eval()
-    valid_batch_loss = []
+    total_loss = 0
+    total_samples = 0
 
-    val_loader_examples_num = len(val_loader.dataset)
-
-    probs = np.zeros((val_loader_examples_num, args.class_numbers), dtype = np.float32)
-    gt    = np.zeros((val_loader_examples_num, args.class_numbers), dtype = np.float32)
-    k=0
+    probs_list = []
+    gt_list = []
 
     with torch.no_grad():
         for image, label in val_loader:
-                
-                image = image.to(device)
-                label = label.to(device)
+            image, label = image.to(device), label.to(device)
+            output = model(image)
+            loss = criterion(output, label)
 
-                output = model(image)
+            total_loss += loss.item() * image.size(0)
+            total_samples += image.size(0)
 
-                loss   = criterion(output, label)
+            probs_list.append(output.cpu())  # 予測値をリストに追加
+            gt_list.append(label.cpu())  # 正解ラベルをリストに追加
 
-                valid_batch_loss.append(loss.item())
+    # すべてのバッチを結合
+    probs = torch.cat(probs_list, dim=0).numpy()
+    gt = torch.cat(gt_list, dim=0).numpy()
 
-                # storing model predictions for metric evaluat`ion 
-                probs[k: k + output.shape[0], :] = output.cpu()
-                gt[   k: k + output.shape[0], :] = label.cpu()
-                k += output.shape[0]
-
-    # metric scenes
     roc_auc = get_roc_auc_score(args, gt, probs)
 
-    return valid_batch_loss, np.mean(valid_batch_loss), roc_auc
+    return total_loss, total_loss / total_samples, roc_auc
+
+# def val_epoch(args, model, val_loader, criterion, device='cuda'):
+    
+#     model.eval()
+#     valid_batch_loss = []
+
+#     val_loader_examples_num = len(val_loader.dataset)
+
+#     probs = np.zeros((val_loader_examples_num, args.class_numbers), dtype = np.float32)
+#     gt    = np.zeros((val_loader_examples_num, args.class_numbers), dtype = np.float32)
+#     k=0
+
+#     with torch.no_grad():
+#         for image, label in val_loader:
+                
+#                 image = image.to(device)
+#                 label = label.to(device)
+
+#                 output = model(image)
+
+#                 loss   = criterion(output, label)
+
+#                 valid_batch_loss.append(loss.item())
+
+#                 # storing model predictions for metric evaluat`ion 
+#                 probs[k: k + output.shape[0], :] = output.cpu()
+#                 gt[   k: k + output.shape[0], :] = label.cpu()
+#                 k += output.shape[0]
+
+#     # metric scenes
+#     roc_auc = get_roc_auc_score(args, gt, probs)
+
+#     return valid_batch_loss, np.mean(valid_batch_loss), roc_auc
 
 
 def fit(args, device, train_loader, val_loader, model, criterion, optimizer, experiment_path):
@@ -214,15 +261,18 @@ def fit(args, device, train_loader, val_loader, model, criterion, optimizer, exp
 
     epochs = args.epochs
     
-    for epoch in tqdm(range(epochs)):
-        logger.info(f'============ EPOCH {epoch+1}/{epochs} ============')
-        
-        
-        logger.info('TRAINING')
-        train_loss, mean_running_train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
+    for epoch in range(epochs):
+        #logger.info(f'============ EPOCH {epoch+1}/{epochs} ============')
+    
+        #logger.info('TRAINING')
+        with tqdm(train_loader) as pbar:
+            pbar.set_description(f'[Epoch {epoch + 1}/{epochs}]')
+            train_loss, mean_running_train_loss = train_epoch(model, pbar, optimizer, criterion, device)
 
-        logger.info('VALIDATION')
-        val_loss, mean_running_val_loss, roc_auc = val_epoch(args, model, val_loader, criterion, device)
+        #logger.info('VALIDATION')
+        with tqdm(val_loader) as pbar:
+            pbar.set_description(f'[Epoch {epoch + 1}/{epochs}]')
+            val_loss, mean_running_val_loss, roc_auc = val_epoch(args, model, pbar, criterion, device)
 
         epoch_train_loss.append(mean_running_train_loss)
         epoch_val_loss.append(mean_running_val_loss)
@@ -230,12 +280,31 @@ def fit(args, device, train_loader, val_loader, model, criterion, optimizer, exp
         total_val_loss_list.extend(val_loss)
 
         # Early stopping & best model saving
-        if mean_running_val_loss < best_info['valid_loss']:
-            best_info['epoch'] = epoch+1
-            best_info['train_loss'] = mean_running_train_loss
-            best_info['valid_loss'] = mean_running_val_loss
+        # if mean_running_val_loss < best_info['valid_loss']:
+        #     best_info['epoch'] = epoch+1
+        #     best_info['train_loss'] = mean_running_train_loss
+        #     best_info['valid_loss'] = mean_running_val_loss
 
-            #save_path = os.path.join(args.experiment_path, 'best.pth')
+        #     #save_path = os.path.join(args.experiment_path, 'best.pth')
+        #     save_model(model, optimizer, epoch+1, best_info['epoch'], best_info['valid_loss'], {
+        #         'epoch_train_loss': epoch_train_loss,
+        #         'epoch_val_loss': epoch_val_loss,
+        #         'total_train_loss_list': total_train_loss_list,
+        #         'total_val_loss_list': total_val_loss_list
+        #     }, os.path.join(experiment_path, 'best.pth'))
+        #     patience_counter = 0  
+        # else:
+        #     patience_counter += 1
+        #     if patience_counter >= patience:
+        #         logger.info('Early stopping triggered!')
+        #         break
+
+        if mean_running_val_loss < best_info['valid_loss']:
+            best_info.update({
+                'epoch': epoch+1,
+                'train_loss': mean_running_train_loss,
+                'valid_loss': mean_running_val_loss
+            })
             save_model(model, optimizer, epoch+1, best_info['epoch'], best_info['valid_loss'], {
                 'epoch_train_loss': epoch_train_loss,
                 'epoch_val_loss': epoch_val_loss,
@@ -245,9 +314,12 @@ def fit(args, device, train_loader, val_loader, model, criterion, optimizer, exp
             patience_counter = 0  
         else:
             patience_counter += 1
-            if patience_counter >= patience:
-                logger.info('Early stopping triggered!')
-                break
+
+        logger.info(f'epoch: {epoch+1}/{epochs}, train loss: {mean_running_train_loss:.4f}, valid loss: {mean_running_val_loss:.4f}')
+
+        if patience_counter >= patience:
+            logger.info('Early stopping triggered!')
+            break
 
         # ログ出力 (10エポックごと & ベスト更新時)
         if ((epoch+1) % 10 == 0) or (mean_running_val_loss < best_info['valid_loss']):
