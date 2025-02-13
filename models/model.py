@@ -65,8 +65,6 @@ class CustomModel(nn.Module):
 
         elif model_name == 'densenet121':
             self.base_model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
-            for param in self.base_model.parameters():
-                param.requires_grad = False
 
             in_features_dim = self.base_model.classifier.in_features
             self.base_model.classifier = nn.Identity()

@@ -89,8 +89,8 @@ class XRaysDataset(Dataset):
                 args.test_df_pkl_path, 
                 'self.test_df'
             )
-            #self.new_df = self.get_test_df()
-            #self.new_df = self.new_df.iloc[50]
+            self.the_chosen, self.all_classes, self.all_classes_dict = self.choose_the_indices()
+            self.new_df = self.train_val_df.iloc[self.the_chosen, :]
 
             # loading the classes list
             with open(os.path.join(args.pkl_dir_path, args.disease_classes_pkl_path), 'rb') as handle:
@@ -232,63 +232,63 @@ class XRaysDataset(Dataset):
 
             for label in labels:
                 all_classes[label] = all_classes.get(label, 0) + 1
-        desc_dic = sorted(all_classes.items(),key=lambda x:x[1])
-        asc_dic = sorted(all_classes.items(), key=lambda x: x[1], reverse=True)
+        #desc_dic = sorted(all_classes.items(),key=lambda x:x[1])
+        #asc_dic = sorted(all_classes.items(), key=lambda x: x[1], reverse=True)
+        class_indices = ['Effusion','Atelectasis','Infiltration','Nodule']
 
-        if self.chosen_class == None:
-            self.chosen_class = [label for label, _ in asc_dic][1:self.class_numbers+1]
+        if self.subset == 'test':
             max_examples_per_class = 1000000
-        else:
+        elif self.class_numbers == 1:
             #min_key = self.find_min_key(self.chosen_class, all_classes)
-            self.chosen_class = [label for label, _ in asc_dic][1:self.class_numbers+1]
-            max_examples_per_class = all_classes[self.chosen_class[-1]]
+            #self.chosen_class = [label for label, _ in asc_dic][1:self.class_numbers+1]
+            max_examples_per_class = all_classes[self.chosen_class]
+            self.all_classes = [self.chosen_class]
+
+        else:
+            #self.chosen_classes = [label for label, _ in asc_dic][1:self.class_numbers+1]
+            max_examples_per_class = 4708
+            self.chosen_class = class_indices
+
 
         #max_examples_per_class = desc_dic[0][1]
         all_classes = {}
         the_chosen = []
-        multi_count = 0
-        no_finding_count = 0
+        class_count = 0
+        #multi_count = 0
+        #no_finding_count = 0
         # for i in tqdm(range(len(merged_df))):
+        print('\nSampling the huuuge training dataset')
         print('\nSampling the huuuge training dataset')
         for i in tqdm(list(np.random.choice(range(length),length, replace = False))):
             
-            if self.subset == 'train' or self.subset == 'val':
-                labels = self.train_val_df.iloc[i]['Finding Labels'].split('|')
+            labels = self.train_val_df.iloc[i]['Finding Labels'].split('|')
 
-            if 'No Finding' in labels and self.class_numbers == 1:
-                if no_finding_count < max_examples_per_class:
-                    the_chosen.append(i)
-                    no_finding_count += 1
-                    # for label in labels:
-                    #     all_classes[label] = all_classes.get(label, 0) + 1
-                    continue
-            
-            # if any(x in labels for x in chosen_class):
-            if any(x in self.chosen_class for x in labels):
-                if all(all_classes.get(label, 0) < max_examples_per_class for label in labels):
+            if self.class_numbers == 1:
+                if self.chosen_class in labels:
                     the_chosen.append(i)
                     for label in labels:
-                        if label in self.chosen_class:
+                        if label == self.chosen_class:
                             all_classes[label] = all_classes.get(label, 0) + 1
+                    continue
 
-        
-            # if 'Hernia' in labels:
-            #     the_chosen.append(i)
-            #     for label in labels:
-            #         all_classes[label] = all_classes.get(label, 0) + 1
-            #     continue
-
-            # if len(labels) > 1:
-            #     the_chosen.append(i)
-            #     multi_count += 1
-            #     for label in labels:
-            #         all_classes[label] = all_classes.get(label, 0) + 1
-            #     continue
-
-            # if all(all_classes.get(label, 0) < max_examples_per_class for label in labels):
-            #     the_chosen.append(i)
-            #     for label in labels:
-            #         all_classes[label] = all_classes.get(label, 0) + 1
+                if any(x in class_indices for x in labels) or 'No Finding' in labels:
+                    if class_count < max_examples_per_class:
+                        the_chosen.append(i)
+                        class_count += 1
+                        for label in labels:
+                            if label in class_indices:
+                                all_classes[label] = all_classes.get(label, 0) + 1
+                            # elif 'No Finding' == label:
+                            #     all_classes['No Finding'] = all_classes.get('No Finding', 0) + 1
+            else:
+                if any(x in class_indices for x in labels) or 'No Finding' in labels:
+                    if all(all_classes.get(label, 0) < max_examples_per_class for label in labels):
+                        the_chosen.append(i)
+                        for label in labels:
+                            if label in class_indices:
+                                all_classes[label] = all_classes.get(label, 0) + 1
+                            # elif 'No Finding' == label:
+                            #     all_classes['No Finding'] = all_classes.get('No Finding', 0) + 1
 
         return the_chosen, self.chosen_class, all_classes
     

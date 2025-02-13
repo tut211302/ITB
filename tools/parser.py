@@ -37,7 +37,10 @@ def get_argument():
 
     args = parser.parse_args()
 
-    args.experiment_path = f'/home/fukuyama/ITB/experiment/{args.class_numbers}/{args.model_name}/'
+    if args.class_numbers == 1:
+        args.experiment_path = f'/home/fukuyama/ITB/experiment/{args.class_numbers}/{args.model_name}/{args.disease_name}'
+    else:
+        args.experiment_path = f'/home/fukuyama/ITB/experiment/{args.class_numbers}/{args.model_name}/'
 
     print(f"Experiment path: {args.experiment_path}")
 

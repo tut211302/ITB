@@ -17,7 +17,7 @@ def init_log_setting(args):
     stream_hd = logging.StreamHandler()
 
     if not os.path.exists(args.experiment_path):
-        os.mkdir(args.experiment_path)
+        os.makedirs(args.experiment_path)
     if args.test:
         file_hd = logging.FileHandler(os.path.join(args.experiment_path, 'test.log'))
     else:

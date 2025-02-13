@@ -57,7 +57,10 @@ def run_train(args):
     transform = get_transform()
 
     # make the datasets
-    XRayTrain_dataset = XRaysDataset(args, args.data_dir, args.class_numbers, None, transform, subset = 'train')
+    if args.class_numbers == 1:
+        XRayTrain_dataset = XRaysDataset(args, args.data_dir, args.class_numbers, args.disease_name, transform, subset = 'train')
+    else:
+        XRayTrain_dataset = XRaysDataset(args, args.data_dir, args.class_numbers, None, transform, subset = 'train')
     train_percentage = 0.8
     #args.train_pc
     train_dataset, val_dataset = torch.utils.data.random_split(XRayTrain_dataset, [int(len(XRayTrain_dataset)*train_percentage), len(XRayTrain_dataset)-int(len(XRayTrain_dataset)*train_percentage)])
@@ -89,7 +92,11 @@ def run_train(args):
     logger.info('we are working with \nImages shape: {} and \nTarget shape: {}'.format( a.shape, b.shape))
 
     model = CustomModel(args.model_name, len(XRayTrain_dataset.all_classes)).to(device)
-    logger.info(model)
+    # base_model = xrv.models.DenseNet(weights="densenet121-res224-nih")
+
+    # num_features = base_model.classifier.in_features
+    # base_model.classifier = torch.nn.Linear(num_features, 4)
+    #logger.info(model)
     #model = CustomModel('densenet121-res224-chex', len(XRayTrain_dataset.all_classes)).to(device)
 
     # define the loss function
@@ -125,7 +132,10 @@ def run_test(args):
     transform = get_transform()
 
     # make the datasets
-    test_dataset = XRaysDataset(args, args.data_dir, args.class_numbers, None, transform, subset = 'test')
+    if args.class_numbers == 1:
+        test_dataset = XRaysDataset(args, args.data_dir, args.class_numbers, args.disease_name, transform, subset = 'test')
+    else:
+        test_dataset = XRaysDataset(args, args.data_dir, args.class_numbers, None, transform, subset = 'test')
     
     logger.info('-----Initial Dataset Information-----')
     logger.info('num images in test_dataset: {}'.format(len(test_dataset)))
@@ -145,9 +155,9 @@ def run_test(args):
     # if args.ckpt == None:
     #     q('ERROR: Please select a checkpoint to load the testing model from')
         
-    logger.info('checkpoint loaded: {}'.format(args.ckpt))
-    ckpt = torch.load(os.path.join(args.experiment_path, args.ckpt)) 
-    model.load_state_dict(ckpt['model'])
+    #logger.info('checkpoint loaded: {}'.format(args.ckpt))
+    #ckpt = torch.load(os.path.join(args.experiment_path, args.ckpt)) 
+    #model.load_state_dict(ckpt['model'])
 
     preds, labels, evaluation_results  = test(args, model, test_loader, device)
 
@@ -156,7 +166,7 @@ def run_test(args):
     df = pd.DataFrame(evaluation_results, columns=["Image_Number", "True_Label", "Pred_Label"])
 
     # Excelに保存
-    df.to_excel("evaluation_results.xlsx", index=False)
+    df.to_excel(f"{args.experiment_path}/{args.class_numbers}/{args.model_name}/evaluation_results.xlsx", index=False)
 
     # evaluate
     if args.class_numbers == 1:
